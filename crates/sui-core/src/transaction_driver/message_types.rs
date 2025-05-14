@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use sui_types::{
-    effects::TransactionEvents, error::SuiError, messages_grpc::RawSubmitTxRequest, object::Object,
+    effects::TransactionEvents, error::SuiError, messages_grpc::RawGetEffectsRequest, object::Object,
     quorum_driver_types::FinalizedEffects, transaction::Transaction,
 };
 
@@ -19,8 +19,8 @@ pub struct SubmitTxRequest {
 }
 
 impl SubmitTxRequest {
-    pub fn into_raw(&self) -> Result<RawSubmitTxRequest, SuiError> {
-        Ok(RawSubmitTxRequest {
+    pub fn into_raw(&self) -> Result<RawGetEffectsRequest, SuiError> {
+        Ok(RawGetEffectsRequest {
             transaction: bcs::to_bytes(&self.transaction)
                 .map_err(|e| SuiError::TransactionSerializationError {
                     error: e.to_string(),

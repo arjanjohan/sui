@@ -15930,6 +15930,7 @@ dependencies = [
  "chrono",
  "ciborium",
  "consensus-config",
+ "consensus-core",
  "coset",
  "criterion",
  "derive_more 1.0.0",

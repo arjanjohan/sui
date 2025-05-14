@@ -56,6 +56,13 @@ impl Transaction {
 /// Index of a transaction in a block.
 pub type TransactionIndex = u16;
 
+pub struct ConsensusPosition {
+    // Block containing a transaction.
+    block: BlockRef,
+    // Index of the transaction in the block.
+    index: TransactionIndex,
+}
+
 /// Votes on transactions in a specific block.
 /// Reject votes are explicit. The rest of transactions in the block receive implicit accept votes.
 // TODO: look into making fields `pub`.

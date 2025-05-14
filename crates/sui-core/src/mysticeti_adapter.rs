@@ -80,7 +80,7 @@ impl ConsensusClient for LazyMysticetiClient {
         &self,
         transactions: &[ConsensusTransaction],
         _epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<BlockStatusReceiver> {
+    ) -> SuiResult<(ConsensusPosition, BlockStatusReceiver)> {
         // TODO(mysticeti): confirm comment is still true
         // The retrieved TransactionClient can be from the past epoch. Submit would fail after
         // Mysticeti shuts down, so there should be no correctness issue.

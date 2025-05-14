@@ -29,17 +29,17 @@ use sui_network::tonic::transport::Channel;
 use sui_types::messages_grpc::{
     HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
     HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-    HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
-    RawSubmitTxResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+    HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawGetEffectsRequest,
+    RawGetEffectsResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
 };
 
 #[async_trait]
 pub trait AuthorityAPI {
     async fn submit_transaction(
         &self,
-        request: RawSubmitTxRequest,
+        request: RawGetEffectsRequest,
         client_addr: Option<SocketAddr>,
-    ) -> Result<RawSubmitTxResponse, SuiError>;
+    ) -> Result<RawGetEffectsResponse, SuiError>;
 
     /// Initiate a new transaction to a Sui or Primary account.
     async fn handle_transaction(
@@ -158,9 +158,9 @@ impl AuthorityAPI for NetworkAuthorityClient {
     /// Submits a transaction to the Sui network for certification and execution.
     async fn submit_transaction(
         &self,
-        request: RawSubmitTxRequest,
+        request: RawGetEffectsRequest,
         client_addr: Option<SocketAddr>,
-    ) -> Result<RawSubmitTxResponse, SuiError> {
+    ) -> Result<RawGetEffectsResponse, SuiError> {
         let mut request = request.into_request();
         insert_metadata(&mut request, client_addr);
 

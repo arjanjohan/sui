@@ -11,7 +11,7 @@ use tokio::sync::oneshot;
 use tracing::{error, warn};
 
 use crate::{
-    block::{BlockRef, Transaction, TransactionIndex},
+    block::{BlockRef, ConsensusPosition, Transaction, TransactionIndex},
     context::Context,
     Round,
 };
@@ -262,7 +262,7 @@ impl TransactionClient {
     pub async fn submit(
         &self,
         transactions: Vec<Vec<u8>>,
-    ) -> Result<(BlockRef, oneshot::Receiver<BlockStatus>), ClientError> {
+    ) -> Result<(ConsensusPosition, oneshot::Receiver<BlockStatus>), ClientError> {
         // TODO: Support returning the block refs for transactions that span multiple blocks
         let included_in_block = self.submit_no_wait(transactions).await?;
         included_in_block
@@ -283,7 +283,8 @@ impl TransactionClient {
     pub(crate) async fn submit_no_wait(
         &self,
         transactions: Vec<Vec<u8>>,
-    ) -> Result<oneshot::Receiver<(BlockRef, oneshot::Receiver<BlockStatus>)>, ClientError> {
+    ) -> Result<oneshot::Receiver<(ConsensusPosition, oneshot::Receiver<BlockStatus>)>, ClientError>
+    {
         let (included_in_block_ack_send, included_in_block_ack_receive) = oneshot::channel();
 
         let mut bundle_size = 0;

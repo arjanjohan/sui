@@ -38,6 +38,7 @@ use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::fp_ensure;
+use sui_types::messages_consensus::ConsensusPosition;
 use sui_types::messages_consensus::ConsensusTransactionKind;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKey};
 use sui_types::transaction::TransactionDataAPI;
@@ -233,7 +234,7 @@ pub trait ConsensusClient: Sync + Send + 'static {
         &self,
         transactions: &[ConsensusTransaction],
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<BlockStatusReceiver>;
+    ) -> SuiResult<(ConsensusPosition, BlockStatusReceiver)>;
 }
 
 /// Submit Sui certificates to the consensus.
@@ -612,8 +613,9 @@ impl ConsensusAdapter {
         transaction: ConsensusTransaction,
         lock: Option<&RwLockReadGuard<ReconfigState>>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        tx_consensus_position: oneshot::Sender<ConsensusPosition>,
     ) -> SuiResult<JoinHandle<()>> {
-        self.submit_batch(&[transaction], lock, epoch_store)
+        self.submit_batch(&[transaction], lock, epoch_store, tx_consensus_position)
     }
 
     pub fn submit_batch(
@@ -621,6 +623,7 @@ impl ConsensusAdapter {
         transactions: &[ConsensusTransaction],
         lock: Option<&RwLockReadGuard<ReconfigState>>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        tx_consensus_position: oneshot::Sender<ConsensusPosition>,
     ) -> SuiResult<JoinHandle<()>> {
         if transactions.len() > 1 {
             // In soft bundle, we need to check if all transactions are of CertifiedTransaction
@@ -638,7 +641,7 @@ impl ConsensusAdapter {
         }
 
         epoch_store.insert_pending_consensus_transactions(transactions, lock)?;
-        Ok(self.submit_unchecked(transactions, epoch_store))
+        Ok(self.submit_unchecked(transactions, epoch_store, tx_consensus_position))
     }
 
     /// Performs weakly consistent checks on internal buffers to quickly
@@ -658,11 +661,14 @@ impl ConsensusAdapter {
         self: &Arc<Self>,
         transactions: &[ConsensusTransaction],
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        tx_consensus_position: oneshot::Sender<ConsensusPosition>,
     ) -> JoinHandle<()> {
         // Reconfiguration lock is dropped when pending_consensus_transactions is persisted, before it is handled by consensus
-        let async_stage = self
-            .clone()
-            .submit_and_wait(transactions.to_vec(), epoch_store.clone());
+        let async_stage = self.clone().submit_and_wait(
+            transactions.to_vec(),
+            epoch_store.clone(),
+            tx_consensus_position,
+        );
         // Number of these tasks is weakly limited based on `num_inflight_transactions`.
         // (Limit is not applied atomically, and only to user transactions.)
         let join_handle = spawn_monitored_task!(async_stage);
@@ -673,6 +679,7 @@ impl ConsensusAdapter {
         self: Arc<Self>,
         transactions: Vec<ConsensusTransaction>,
         epoch_store: Arc<AuthorityPerEpochStore>,
+        tx_consensus_position: oneshot::Sender<ConsensusPosition>,
     ) {
         // When epoch_terminated signal is received all pending submit_and_wait_inner are dropped.
         //
@@ -686,7 +693,11 @@ impl ConsensusAdapter {
         // this means we might be sending transactions from previous epochs to narwhal of
         // new epoch if we have not had this barrier.
         epoch_store
-            .within_alive_epoch(self.submit_and_wait_inner(transactions, &epoch_store))
+            .within_alive_epoch(self.submit_and_wait_inner(
+                transactions,
+                &epoch_store,
+                tx_consensus_position,
+            ))
             .await
             .ok(); // result here indicates if epoch ended earlier, we don't care about it
     }
@@ -696,6 +707,7 @@ impl ConsensusAdapter {
         self: Arc<Self>,
         transactions: Vec<ConsensusTransaction>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        tx_consensus_position: oneshot::Sender<ConsensusPosition>,
     ) {
         if transactions.is_empty() {
             return;
@@ -805,7 +817,7 @@ impl ConsensusAdapter {
 
                 loop {
                     // Submit the transaction to consensus and return the submit result with a status waiter
-                    let status_waiter = self
+                    let (consensus_position, status_waiter) = self
                         .submit_inner(
                             &transactions,
                             epoch_store,
@@ -825,7 +837,7 @@ impl ConsensusAdapter {
                             trace!(
                                 "Transaction {transaction_keys:?} has been sequenced by consensus."
                             );
-                            break;
+                            break consensus_position;
                         }
                         Ok(BlockStatus::GarbageCollected(_)) => {
                             self.metrics
@@ -854,8 +866,9 @@ impl ConsensusAdapter {
 
             guard.processed_method = match select(processed_waiter, submit_inner.boxed()).await {
                 Either::Left((observed_via_consensus, _submit_inner)) => observed_via_consensus,
-                Either::Right(((), processed_waiter)) => {
-                    debug!("Submitted {transaction_keys:?} to consensus");
+                Either::Right((consensus_position, processed_waiter)) => {
+                    debug!("Submitted {transaction_keys:?} to consensus at {consensus_position:?}");
+                    tx_consensus_position.send(consensus_position);
                     processed_waiter.await
                 }
             };
@@ -921,11 +934,11 @@ impl ConsensusAdapter {
         transaction_keys: &[SequencedConsensusTransactionKey],
         tx_type: &str,
         is_soft_bundle: bool,
-    ) -> BlockStatusReceiver {
+    ) -> (ConsensusPosition, BlockStatusReceiver) {
         let ack_start = Instant::now();
         let mut retries: u32 = 0;
 
-        let status_waiter = loop {
+        let (consensus_position, status_waiter) = loop {
             match self
                 .consensus_client
                 .submit(transactions, epoch_store)
@@ -977,7 +990,7 @@ impl ConsensusAdapter {
             .with_label_values(&[&bucket, tx_type])
             .observe(ack_start.elapsed().as_secs_f64());
 
-        status_waiter
+        (consensus_position, status_waiter)
     }
 
     /// Waits for transactions to appear either to consensus output or been executed via a checkpoint (state sync).

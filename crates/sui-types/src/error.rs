@@ -502,6 +502,12 @@ pub enum SuiError {
         digest
     )]
     TransactionAlreadyExecuted { digest: TransactionDigest },
+
+    #[error(
+        "Attempt to move to `Executed` state an transaction that has already been executed: {:?}.",
+        digest
+    )]
+    ConsensusTransactionsAlreadyProcessed { digests: TransactionDigest },
     #[error("Object ID did not have the expected type")]
     BadObjectType { error: String },
     #[error("Fail to retrieve Object layout for {st}")]
@@ -560,6 +566,16 @@ pub enum SuiError {
     TransactionOrchestratorLocalExecutionError { error: String },
 
     // Errors returned by authority and client read API's
+    #[error(
+        "Failure serializing consensus position in the requested format: {:?}",
+        error
+    )]
+    ConsensusPositionSerializationError { error: String },
+    #[error(
+        "Failure deserializing consensus position from the provided format: {:?}",
+        error
+    )]
+    ConsensusPositionDeserializationError { error: String },
     #[error("Failure serializing transaction in the requested format: {:?}", error)]
     TransactionSerializationError { error: String },
     #[error(

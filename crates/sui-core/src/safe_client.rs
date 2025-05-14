@@ -19,8 +19,8 @@ use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
 use sui_types::messages_grpc::{
-    HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
-    ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest, SubmitTxResponse,
+    GetEffectsResponse, HandleCertificateRequestV3, HandleCertificateResponseV2,
+    HandleCertificateResponseV3, ObjectInfoRequest, ObjectInfoResponse, RawGetEffectsRequest,
     SystemStateRequest, TransactionInfoRequest, TransactionStatus, VerifiedObjectInfoResponse,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
@@ -315,9 +315,9 @@ where
     /// Submit a transaction for certification and execution.
     pub async fn submit_transaction(
         &self,
-        request: RawSubmitTxRequest,
+        request: RawGetEffectsRequest,
         client_addr: Option<SocketAddr>,
-    ) -> Result<SubmitTxResponse, SuiError> {
+    ) -> Result<GetEffectsResponse, SuiError> {
         let _timer = self.metrics.handle_certificate_latency.start_timer();
         let include_events = request.include_events;
         let include_input_objects = request.include_input_objects;
@@ -327,7 +327,7 @@ where
             .submit_transaction(request, client_addr)
             .await?;
 
-        let response = SubmitTxResponse::from_bytes(
+        let response = GetEffectsResponse::from_bytes(
             response.effects,
             include_events,
             response.events,
@@ -502,14 +502,14 @@ where
 
     fn verify_submit_transaction_response(
         &self,
-        SubmitTxResponse {
+        GetEffectsResponse {
             effects,
             events,
             input_objects,
             output_objects,
             auxiliary_data,
-        }: SubmitTxResponse,
-    ) -> SuiResult<SubmitTxResponse> {
+        }: GetEffectsResponse,
+    ) -> SuiResult<GetEffectsResponse> {
         // Check Events
         self.verify_events(&events, effects.events_digest())?;
 
@@ -531,7 +531,7 @@ where
                 .map(|(object_ref, _, _)| (object_ref.0, object_ref)),
         )?;
 
-        Ok(SubmitTxResponse {
+        Ok(GetEffectsResponse {
             effects,
             events,
             input_objects,

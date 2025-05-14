@@ -32,7 +32,7 @@ use sui_types::{
     messages_grpc::{
         HandleCertificateResponseV2, HandleSoftBundleCertificatesRequestV3,
         HandleSoftBundleCertificatesResponseV3, HandleTransactionResponse, ObjectInfoRequest,
-        ObjectInfoResponse, RawSubmitTxRequest, RawSubmitTxResponse, SystemStateRequest,
+        ObjectInfoResponse, RawGetEffectsRequest, RawGetEffectsResponse, SystemStateRequest,
         TransactionInfoRequest, TransactionInfoResponse,
     },
     sui_system_state::SuiSystemState,
@@ -66,9 +66,9 @@ pub struct LocalAuthorityClient {
 impl AuthorityAPI for LocalAuthorityClient {
     async fn submit_transaction(
         &self,
-        request: RawSubmitTxRequest,
+        request: RawGetEffectsRequest,
         _client_addr: Option<SocketAddr>,
-    ) -> Result<RawSubmitTxResponse, SuiError> {
+    ) -> Result<RawGetEffectsResponse, SuiError> {
         if self.fault_config.fail_before_submit_transaction {
             return Err(SuiError::from("Mock error before submit_transaction"));
         }
@@ -103,7 +103,7 @@ impl AuthorityAPI for LocalAuthorityClient {
                 .then(|| state.get_transaction_output_objects(&effects))
                 .and_then(Result::ok);
 
-            return Ok(RawSubmitTxResponse {
+            return Ok(RawGetEffectsResponse {
                 effects: bcs::to_bytes(&effects)
                     .map_err(|e| SuiError::TransactionEffectsSerializationError {
                         error: e.to_string(),
@@ -164,7 +164,7 @@ impl AuthorityAPI for LocalAuthorityClient {
             .then(|| self.state.get_transaction_output_objects(&effects))
             .and_then(Result::ok);
 
-        Ok::<_, SuiError>(RawSubmitTxResponse {
+        Ok::<_, SuiError>(RawGetEffectsResponse {
             effects: bcs::to_bytes(&effects)
                 .map_err(|e| SuiError::TransactionEffectsSerializationError {
                     error: e.to_string(),
@@ -430,9 +430,9 @@ impl AuthorityAPI for MockAuthorityApi {
     /// Submit a new transaction to a Sui or Primary account.
     async fn submit_transaction(
         &self,
-        _request: RawSubmitTxRequest,
+        _request: RawGetEffectsRequest,
         _client_addr: Option<SocketAddr>,
-    ) -> Result<RawSubmitTxResponse, SuiError> {
+    ) -> Result<RawGetEffectsResponse, SuiError> {
         unimplemented!();
     }
 
@@ -534,9 +534,9 @@ pub struct HandleTransactionTestAuthorityClient {
 impl AuthorityAPI for HandleTransactionTestAuthorityClient {
     async fn submit_transaction(
         &self,
-        _request: RawSubmitTxRequest,
+        _request: RawGetEffectsRequest,
         _client_addr: Option<SocketAddr>,
-    ) -> Result<RawSubmitTxResponse, SuiError> {
+    ) -> Result<RawGetEffectsResponse, SuiError> {
         unimplemented!()
     }
 
